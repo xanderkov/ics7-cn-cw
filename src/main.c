@@ -8,44 +8,48 @@
 #include <unistd.h>
 
 #include "server/server.h"
+#include "server/socket_poll.h"
 #include "logger/logger.h"
 
-static const size_t num_threads = 10;
-static const size_t num_items   = 100;
+#define PORT 9990
 
-void worker(void *arg)
-{
+static const size_t num_threads = 10;
+static const size_t num_items = 100;
+
+void worker(void *arg) {
   int *val = arg;
-  int  old = *val;
+  int old = *val;
 
   *val += 1000;
   LOG_INFO("tid=%p, old=%d, val=%d\n", pthread_self(), old, *val);
 
-  if (*val%2)
+  if (*val % 2)
 	usleep(100000);
 }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   tpool_t *tm;
-  int     *vals;
-  size_t   i;
+  int *vals;
+  size_t i;
 
-  tm   = tpool_create(num_threads);
+  tm = tpool_create(num_threads);
   vals = calloc(num_items, sizeof(*vals));
 
-  for (i=0; i<num_items; i++) {
+  for (i = 0; i < num_items; i++) {
 	vals[i] = i;
-	tpool_add_work(tm, worker, vals+i);
+	tpool_add_work(tm, worker, vals + i);
   }
 
   tpool_wait(tm);
 
-  for (i=0; i<num_items; i++) {
+  for (i = 0; i < num_items; i++) {
 	LOG_TRACE("%d\n", vals[i]);
   }
 
   free(vals);
   tpool_destroy(tm);
+
+  creat_socket(PORT);
+
   return 0;
 }

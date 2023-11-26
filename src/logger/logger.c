@@ -37,30 +37,27 @@ static const char *level_colors[] = {
 	BLU, CYN, GRN, YEL, RED, MAG
 };
 
-
 static void stdout_callback(log_Event *ev) {
   char buf[16];
   buf[strftime(buf, sizeof(buf), "%H:%M:%S", ev->time)] = '\0';
 
   fprintf(
-    ev->udata, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-    buf, level_colors[ev->level], level_strings[ev->level],
-    ev->file, ev->line);
+	  ev->udata, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
+	  buf, level_colors[ev->level], level_strings[ev->level],
+	  ev->file, ev->line);
 
   vfprintf(ev->udata, ev->fmt, ev->ap);
   fprintf(ev->udata, "\n");
   fflush(ev->udata);
 }
 
-static void lock(void)   {
+static void lock(void) {
   if (L.lock) { L.lock(true, L.udata); }
 }
-
 
 static void unlock(void) {
   if (L.lock) { L.lock(false, L.udata); }
 }
-
 
 static void init_event(log_Event *ev, void *udata) {
   if (!ev->time) {
@@ -69,7 +66,6 @@ static void init_event(log_Event *ev, void *udata) {
   }
   ev->udata = udata;
 }
-
 
 void log_log(int level, const char *file, int line, const char *fmt, ...) {
   log_Event ev = {

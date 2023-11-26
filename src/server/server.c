@@ -6,29 +6,26 @@
 #include "server.h"
 #include <stdlib.h>
 
-static tpool_work_t *tpool_work_create(thread_func_t func, void *arg)
-{
+static tpool_work_t *tpool_work_create(thread_func_t func, void *arg) {
   tpool_work_t *work;
 
   if (func == NULL)
 	return NULL;
 
-  work       = malloc(sizeof(*work));
+  work = malloc(sizeof(*work));
   work->func = func;
-  work->arg  = arg;
+  work->arg = arg;
   work->next = NULL;
   return work;
 }
 
-static void tpool_work_destroy(tpool_work_t *work)
-{
+static void tpool_work_destroy(tpool_work_t *work) {
   if (work == NULL)
 	return;
   free(work);
 }
 
-static tpool_work_t *tpool_work_get(tpool_t *tm)
-{
+static tpool_work_t *tpool_work_get(tpool_t *tm) {
   tpool_work_t *work;
 
   if (tm == NULL)
@@ -40,7 +37,7 @@ static tpool_work_t *tpool_work_get(tpool_t *tm)
 
   if (work->next == NULL) {
 	tm->work_first = NULL;
-	tm->work_last  = NULL;
+	tm->work_last = NULL;
   } else {
 	tm->work_first = work->next;
   }
@@ -48,9 +45,8 @@ static tpool_work_t *tpool_work_get(tpool_t *tm)
   return work;
 }
 
-static void *tpool_worker(void *arg)
-{
-  tpool_t      *tm = arg;
+static void *tpool_worker(void *arg) {
+  tpool_t *tm = arg;
   tpool_work_t *work;
 
   while (1) {
@@ -84,16 +80,15 @@ static void *tpool_worker(void *arg)
   return NULL;
 }
 
-tpool_t *tpool_create(size_t num)
-{
-  tpool_t   *tm;
-  pthread_t  thread;
-  size_t     i;
+tpool_t *tpool_create(size_t num) {
+  tpool_t *tm;
+  pthread_t thread;
+  size_t i;
 
   if (num == 0)
 	num = 2;
 
-  tm             = calloc(1, sizeof(*tm));
+  tm = calloc(1, sizeof(*tm));
   tm->thread_cnt = num;
 
   pthread_mutex_init(&(tm->work_mutex), NULL);
@@ -101,9 +96,9 @@ tpool_t *tpool_create(size_t num)
   pthread_cond_init(&(tm->working_cond), NULL);
 
   tm->work_first = NULL;
-  tm->work_last  = NULL;
+  tm->work_last = NULL;
 
-  for (i=0; i<num; i++) {
+  for (i = 0; i < num; i++) {
 	pthread_create(&thread, NULL, tpool_worker, tm);
 	pthread_detach(thread);
   }
@@ -111,8 +106,7 @@ tpool_t *tpool_create(size_t num)
   return tm;
 }
 
-void tpool_destroy(tpool_t *tm)
-{
+void tpool_destroy(tpool_t *tm) {
   tpool_work_t *work;
   tpool_work_t *work2;
 
@@ -139,8 +133,7 @@ void tpool_destroy(tpool_t *tm)
   free(tm);
 }
 
-bool tpool_add_work(tpool_t *tm, thread_func_t func, void *arg)
-{
+bool tpool_add_work(tpool_t *tm, thread_func_t func, void *arg) {
   tpool_work_t *work;
 
   if (tm == NULL)
@@ -153,10 +146,10 @@ bool tpool_add_work(tpool_t *tm, thread_func_t func, void *arg)
   pthread_mutex_lock(&(tm->work_mutex));
   if (tm->work_first == NULL) {
 	tm->work_first = work;
-	tm->work_last  = tm->work_first;
+	tm->work_last = tm->work_first;
   } else {
 	tm->work_last->next = work;
-	tm->work_last       = work;
+	tm->work_last = work;
   }
 
   pthread_cond_broadcast(&(tm->work_cond));
@@ -165,8 +158,7 @@ bool tpool_add_work(tpool_t *tm, thread_func_t func, void *arg)
   return true;
 }
 
-void tpool_wait(tpool_t *tm)
-{
+void tpool_wait(tpool_t *tm) {
   if (tm == NULL)
 	return;
 
