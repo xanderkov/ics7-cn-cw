@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 
 int creat_socket(int port)
 {
@@ -38,65 +39,74 @@ int creat_socket(int port)
 	return server_socket;
 }
 
+int accept_socket(struct pollfd *poll_fd, int numfds, int server_socket)
+{
+	struct sockaddr_in cliaddr;
+	int addrlen = sizeof(cliaddr);
+	int client_socket = accept(server_socket, (struct sockaddr*)&cliaddr, &addrlen);
+	LOG_INFO("accept success %s\n", inet_ntoa(cliaddr.sin_addr));
+	poll_fd->fd = client_socket;
+	poll_fd->events = POLLIN | POLLPRI;
+	numfds++;
+	return numfds;
+}
+
+void move_socket_after_close(struct pollfd *pollfds, int numfds, int fd_index)
+{
+	for (int i = fd_index; i < numfds; i++) {
+		pollfds[i] = pollfds[i + 1];
+	}
+}
+
+int analyze_client_text(struct pollfd *pollfds)
+{
+	char buf[SIZE];
+	ssize_t bufsize = read(pollfds->fd, buf, SIZE - 1);
+	LOG_TRACE("Serving client %d", pollfds->fd);
+	buf[bufsize] = '\0';
+	LOG_TRACE("From client: %s\n", buf);
+}
+
+int read_from_socket(struct pollfd *pollfds, int numfds, int fd_index)
+{
+	int nread;
+	ioctl(pollfds[fd_index].fd, FIONREAD, &nread);
+	if (nread == 0)
+	{
+		close(pollfds[fd_index].fd);
+		pollfds[fd_index].events = 0;
+		LOG_TRACE("Removing client %d", pollfds[fd_index].fd);
+		move_socket_after_close(pollfds, numfds, fd_index);
+		numfds--;
+	}
+	else
+		analyze_client_text(&pollfds[fd_index]);
+	return numfds;
+}
+
+int poll_sockets(struct pollfd *pollfds, int numfds, int server_socket)
+{
+	poll(pollfds, numfds, -1);
+
+	for (int fd_index = 0; fd_index < numfds; fd_index++)
+	{
+		if (pollfds[fd_index].revents & POLLIN)
+			numfds = accept_socket(&pollfds[fd_index], numfds, server_socket);
+		else
+			numfds = read_from_socket(pollfds, numfds, fd_index);
+	}
+	return numfds;
+}
+
 int wait_client(int server_socket)
 {
 	struct pollfd pollfds[MAX_CLIENTS + 1];
 	pollfds[0].fd = server_socket;
 	pollfds[0].events = POLLIN | POLLPRI;
-	int useClient = 0;
+	int numfds = 1;
 
 	while (1)
 	{
-		// printf("useClient => %d\n", useClient);
-		int pollResult = poll(pollfds, useClient + 1, 5000);
-		if (pollResult > 0)
-		{
-			if (pollfds[0].revents & POLLIN)
-			{
-				struct sockaddr_in cliaddr;
-				int addrlen = sizeof(cliaddr);
-				int client_socket = accept(server_socket, (struct sockaddr*)&cliaddr, &addrlen);
-				printf("accept success %s\n", inet_ntoa(cliaddr.sin_addr));
-				for (int i = 1; i < MAX_CLIENTS; i++)
-				{
-					if (pollfds[i].fd == 0)
-					{
-
-						pollfds[i].fd = client_socket;
-						pollfds[i].events = POLLIN | POLLPRI;
-						useClient++;
-						break;
-					}
-				}
-			}
-			for (int i = 1; i < MAX_CLIENTS; i++)
-			{
-				if (pollfds[i].fd > 0 && pollfds[i].revents & POLLIN)
-				{
-					char buf[SIZE];
-					int bufSize = read(pollfds[i].fd, buf, SIZE - 1);
-					if (bufSize == -1)
-					{
-						pollfds[i].fd = 0;
-						pollfds[i].events = 0;
-						pollfds[i].revents = 0;
-						useClient--;
-					}
-					else if (bufSize == 0)
-					{
-						pollfds[i].fd = 0;
-						pollfds[i].events = 0;
-						pollfds[i].revents = 0;
-						useClient--;
-					}
-					else
-					{
-
-						buf[bufSize] = '\0';
-						printf("From client: %s\n", buf);
-					}
-				}
-			}
-		}
+		numfds = poll_sockets(pollfds, numfds, server_socket);
 	}
 }

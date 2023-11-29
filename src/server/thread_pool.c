@@ -3,7 +3,7 @@
 //
 // Количество потоков m1 pro - 10
 
-#include "server.h"
+#include "thread_pool.h"
 #include <stdlib.h>
 
 static tpool_work_t* tpool_work_create(thread_func_t func, void* arg)

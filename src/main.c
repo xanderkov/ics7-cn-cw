@@ -3,11 +3,10 @@
 //
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <pthread.h>
 #include <unistd.h>
 
-#include "server/server.h"
+#include "server/thread_pool.h"
 #include "server/socket_poll.h"
 #include "logger/logger.h"
 
@@ -37,13 +36,13 @@ int main(int argc, char** argv)
 	tm = tpool_create(num_threads);
 	vals = calloc(num_items, sizeof(*vals));
 
-	for (i = 0; i < num_items; i++)
-	{
-		vals[i] = i;
-		tpool_add_work(tm, worker, vals + i);
-	}
-
-	tpool_wait(tm);
+//	for (i = 0; i < num_items; i++)
+//	{
+//		vals[i] = i;
+//		tpool_add_work(tm, worker, vals + i);
+//	}
+//
+//	tpool_wait(tm);
 
 	for (i = 0; i < num_items; i++)
 	{
@@ -53,7 +52,11 @@ int main(int argc, char** argv)
 	free(vals);
 	tpool_destroy(tm);
 
-	creat_socket(PORT);
+	int server_socket = creat_socket(PORT);
+	int client_socket = wait_client(server_socket);
+
+	close(client_socket);
+	close(server_socket);
 
 	return 0;
 }

@@ -7,7 +7,7 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(
         ${CMAKE_PROJECT_NAME}
-        server/server.c
+        server/thread_pool.c
         main.c
         logger/logger.c
         server/socket_poll.c)
