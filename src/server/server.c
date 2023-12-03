@@ -26,6 +26,12 @@ server_t *new_http_server(char host[HOST_SIZE], int port, int thread_num)
 		return NULL;
 	}
 
+	server->clients = malloc(sizeof(struct pollfd) * server->cl_num);
+	if (server->clients == NULL) {
+		LOG_ERROR("Failed to alloc clients fds");
+		free(server);
+		return NULL;
+	}
 	for (ssize_t i = 0; i < server->cl_num; i++) {
 		server->clients[i].fd = -1;
 	}
@@ -69,7 +75,7 @@ server_t *new_http_server(char host[HOST_SIZE], int port, int thread_num)
 int run_http_server_t(server_t *server)
 {
 	server->listen_sock = creat_socket(server->port, server->host);
-	int client_socket = wait_client(server->listen_sock);
+	int client_socket = wait_client(server);
 
 }
 

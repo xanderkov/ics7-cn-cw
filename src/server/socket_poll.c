@@ -4,6 +4,8 @@
 
 #include "socket_poll.h"
 #include "thread_pool.h"
+#include "request.h"
+#include "responses.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -15,8 +17,17 @@
 #include <sys/time.h>
 #include <poll.h>
 #include <sys/ioctl.h>
+#include <stdlib.h>
 
-static const size_t num_threads = 10;
+#define REQ_SIZE 2048
+#define RESP_SIZE 1024
+
+typedef struct worker_sock_t {
+	char *wd;
+	int clientfd;
+} worker_sock_t;
+
+
 
 int creat_socket(int port, char *host)
 {
@@ -42,39 +53,98 @@ int creat_socket(int port, char *host)
 	return server_socket;
 }
 
+int read_req(char *buff, int clientfd) {
+	long byte_read = 0, msg_size = 0;
+
+	byte_read = read(clientfd, buff, REQ_SIZE - 1);
+	if (byte_read <= 0)
+		return -1;
+	msg_size = byte_read;
+	buff[msg_size - 1] = '\0';
+
+	return 0;
+}
+
+int write_response(int fd, const void *buf, size_t n) {
+	int byte_write = write(fd, buf, n);
+	if (byte_write < 0)
+	{
+		LOG_ERROR("write error");
+	}
+	return byte_write;
+}
+
+void send_err(int clientfd, const char *str) {
+	LOG_INFO("%s", str);
+	write_response(clientfd, str, strlen(str));
+}
 
 void worker(void* arg)
 {
+	worker_sock_t *worker_sock = arg;
+	char *wd;
+	int clientfd = worker_sock->clientfd;
+	strcpy(wd, worker_sock->wd);
+	request_t req;
+	char *buff = calloc(REQ_SIZE, sizeof(char));
+	if (buff == NULL) {
+		LOG_ERROR("failed alloc req buf");
+		return;
+	}
 
-	struct pollfd *poll_fd = arg;
+	if (read_req(buff, clientfd) < 0) {
+		send_err(clientfd, INT_SERVER_ERR_STR);
+		close(clientfd);
+		return;
+	}
 
-	char buf[SIZE];
-	char method[SIZE];  /* request method */
-	char uri[SIZE];     /* request uri */
-	char version[SIZE]; /* request method */
+	if (parse_req(&req, buff) < 0) {
+		send_err(clientfd, BAD_REQUEST_STR);
+		close(clientfd);
+		return;
+	}
+	if (req.method == BAD) {
+		LOG_ERROR("unsupported http method");
+		send_err(clientfd, M_NOT_ALLOWED_STR);
+		close(clientfd);
+		return;
+	}
 
-	ssize_t bufsize = read(poll_fd->fd, buf, SIZE - 1);
-	LOG_TRACE("Serving client %d", poll_fd->fd);
-
-	buf[bufsize] = '\0';
-
-	LOG_INFO("From client: %s", buf);
-
-	sscanf(buf, "%s %s %s\n", method, uri, version);
-
-	LOG_INFO("Method: %s", method);
+//	process_req(clientfd, &req, wd);
+	LOG_INFO("OK");
+	close(clientfd);
 }
 
-int accept_socket(struct pollfd *poll_fd, int numfds, int server_socket)
+int accept_socket(int numfds, int maxcl, server_t *server)
 {
-	struct sockaddr_in cliaddr;
-	int addrlen = sizeof(cliaddr);
-	int client_socket = accept(server_socket, (struct sockaddr*)&cliaddr, &addrlen);
-	LOG_INFO("accept success %s\n", inet_ntoa(cliaddr.sin_addr));
-	poll_fd->fd = client_socket;
-	poll_fd->events = POLLIN | POLLPRI;
-	numfds++;
-	return numfds;
+	int client_sock = accept(server->listen_sock, NULL, 0);
+	if (client_sock < 0)
+	{
+		return -1;
+	}
+
+	long i = 0;
+	for (i = 1; i < server->cl_num; ++i) {
+		if (server->clients[i].fd < 0) {
+			server->clients[i].fd = client_sock;
+			break;
+		}
+	}
+	if (i == server->cl_num) {
+		LOG_ERROR("too many connections");
+		return -1;
+	}
+	server->clients[i].events = POLLIN;
+	if (i > maxcl)
+	{
+		maxcl = i;
+	}
+	if (--numfds < 0)
+	{
+		maxcl = -1;
+	}
+
+	return maxcl;
 }
 
 void move_socket_after_close(struct pollfd *pollfds, int numfds, int fd_index)
@@ -90,54 +160,52 @@ void analyze_client_text(struct pollfd *poll_fd, tpool_t *tm)
 	tpool_wait(tm);
 }
 
-int read_from_socket(struct pollfd *poll_fd, int numfds, tpool_t *tm)
+int read_from_socket(int fd_index, server_t *server)
 {
-	int nread;
-	ioctl(poll_fd->fd, FIONREAD, &nread);
-	if (nread == 0)
-	{
-		char response[] = "HTTP/1.0 200 OK\r\n"
-						  "Content-Type: text/html; charset=UTF-8\r\n\r\n"
-						  "<doctype !html><html><head><title></title>"
-						  "<style>body"
-						  "h1 { font-size:4cm; text-align: center; color: black;"
-						  "}</style></head>"
-						  "<body><h1>Not Found  (HTTP 404)</h1></body></html>\r\n";
-		write(poll_fd->fd, response, strlen(response));
-		close(poll_fd->fd);
-		poll_fd->events = 0;
-//		LOG_TRACE("Removing client %d", poll_fd->fd);
-		numfds--;
+	if (server->clients[fd_index].fd < 0)
+		return -1;
+
+	if (server->clients[fd_index].revents & (POLLIN | POLLERR)) {
+		worker_sock_t worker_sock;
+		worker_sock.clientfd = server->clients[fd_index].fd;
+		strcpy(worker_sock.wd, server->wd);
+
+		tpool_add_work(server->pool, worker, &worker_sock);
+		server->clients[fd_index].fd = -1;
 	}
-	else
-		analyze_client_text(poll_fd, tm);
-	return numfds;
+
+	return 0;
 }
 
-void poll_sockets(struct pollfd *pollfds, int numfds, int server_socket, tpool_t *tm)
+void poll_sockets(int numfds, int maxcl, server_t *server)
 {
-	poll(pollfds, numfds, -1);
+	numfds = poll(server->clients, maxcl + 1, -1);
 
-	for (int fd_index = 0; fd_index < MAX_CLIENTS; fd_index++)
+	if (numfds < 0) {
+		LOG_ERROR("poll error");
+		return;
+	}
+
+	if (server->clients[0].revents & POLLIN)
 	{
-		if (pollfds[fd_index].revents & POLLIN)
-			numfds = accept_socket(&pollfds[fd_index], numfds, server_socket);
-		else
-			numfds = read_from_socket(&pollfds[fd_index], numfds, tm);
+		maxcl = accept_socket(numfds, maxcl, server);
+		if (maxcl < 0)
+			return;
+	}
+
+	for (int fd_index = 1; fd_index < maxcl + 1; fd_index++)
+	{
+		numfds = read_from_socket(fd_index, server);
 	}
 }
 
-int wait_client(int server_socket)
+int wait_client(server_t *server)
 {
-	struct pollfd pollfds[MAX_CLIENTS + 1];
-	pollfds[0].fd = server_socket;
-	pollfds[0].events = POLLIN | POLLPRI;
-	int numfds = 1;
+	server->clients[0].fd = server->listen_sock;
+	server->clients[0].events = POLLIN;
+	int numfds = 0, maxcl = 0;
 
-	tpool_t* tm;
-	tm = tpool_create(num_threads);
 
 	while (1)
-		poll_sockets(pollfds, numfds, server_socket, tm);
-	tpool_destroy(tm);
+		poll_sockets(numfds, maxcl, server);
 }
