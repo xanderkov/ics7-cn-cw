@@ -10,9 +10,12 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <string.h>
 
 #define BUFF_SIZE 128
 #define RESP_SIZE 1024
+
+
 
 int main() {
 	char ip[] = "0.0.0.0";
@@ -35,13 +38,13 @@ int main() {
 		exit(EXIT_FAILURE);
 	}
 
-	char msg_to[BUFF_SIZE] = "v.mp4", buff_resp[RESP_SIZE] = "";
+	char msg_to[BUFF_SIZE] = "GET input/turetskaya_armia.gif HTTP/1.0", buff_resp[RESP_SIZE] = "";
 	if (send(sock, msg_to, BUFF_SIZE, 0) == -1) {
 		perror("can't send");
 		exit(EXIT_FAILURE);
 	}
 
-	FILE *f= fopen("./t.mp4", "wb");
+	FILE *f= fopen("./output/turetskaya_armia.gif", "wb");
 	if (f == NULL) {
 		perror("fopen error: ");
 		close(sock);
@@ -50,7 +53,9 @@ int main() {
 
 	unsigned long long total_read = 0, total_write = 0;
 	int byte_read = 0, byte_write = 0;
+	int first_bytes = 0;
 	while ((byte_read = read(sock, buff_resp, RESP_SIZE)) > 0) {
+
 		printf("read %d bytes\n", byte_read);
 		total_read += byte_read;
 		byte_write = fwrite(buff_resp, sizeof(char), byte_read, f);

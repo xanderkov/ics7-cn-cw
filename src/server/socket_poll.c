@@ -57,14 +57,14 @@ int creat_socket(int port, char *host)
 }
 
 int read_req(char *buff, int clientfd) {
-	long byte_read = 0, msg_size = 0;
+	long byte_read = 0;
 
 	byte_read = read(clientfd, buff, REQ_SIZE - 1);
 	if (byte_read <= 0)
+	{
 		return -1;
-	msg_size = byte_read;
-	buff[msg_size - 1] = '\0';
-
+	}
+	buff[byte_read - 1] = '\0';
 	return 0;
 }
 
@@ -147,13 +147,12 @@ int send_headers(char *path, int clientfd) {
 	}
 
 	int byte_write = write_response(clientfd, res_str, rc);
+	free(res_str);
 	if (byte_write < 0)
 	{
-		free(res_str);
 		return -1;
 	}
 
-	free(res_str);
 	return 0;
 }
 
