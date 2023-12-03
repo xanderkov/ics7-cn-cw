@@ -43,14 +43,16 @@ int creat_socket(int port, char *host)
 	if (bindResult == -1)
 	{
 		LOG_ERROR("bindResult");
+		return -1;
 	}
 
 	int listenResult = listen(server_socket, 5);
 	if (listenResult == -1)
 	{
 		LOG_ERROR("listenResult");
+		return -1;
 	}
-	LOG_INFO("SOCKET CREATED on host:port %s:%d!!!", host, addr.sin_port);
+	LOG_INFO("SOCKET CREATED on host:port %s:%d!!!", host, port);
 	return server_socket;
 }
 
@@ -258,6 +260,7 @@ void worker(void* arg)
 	char *wd = calloc(PATH_NUM, sizeof(char));;
 	int clientfd = worker_sock->clientfd;
 	strcpy(wd, worker_sock->wd);
+
 	request_t req;
 	char *buff = calloc(REQ_SIZE, sizeof(char));
 	if (buff == NULL) {
@@ -324,7 +327,10 @@ int wait_client(server_t *server)
 			if (--numfds <= 0) continue;
 		}
 		for (int i = 1; i <= maxcl; ++i) {
-			if (server->clients[i].fd < 0) continue;
+			if (server->clients[i].fd < 0)
+			{
+				continue;
+			}
 
 			if (server->clients[i].revents & (POLLIN | POLLERR)) {
 				worker_sock_t worker_sock;

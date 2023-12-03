@@ -75,6 +75,10 @@ server_t *new_http_server(char host[HOST_SIZE], int port, int thread_num)
 int run_http_server_t(server_t *server)
 {
 	server->listen_sock = creat_socket(server->port, server->host);
+	if (server->listen_sock < 0)
+	{
+		return -1;
+	}
 	int client_socket = wait_client(server);
 }
 
