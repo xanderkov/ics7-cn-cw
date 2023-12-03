@@ -10,7 +10,7 @@
 #define SIZE 1024
 #define MAX_CLIENTS 100
 
-int creat_socket(int port);
+int creat_socket(int port, char *host);
 int wait_client(int server_socket);
 
 #endif //SERVER_THREAD_SERVER_SOCKET_POLL_H_

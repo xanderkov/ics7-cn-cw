@@ -10,7 +10,8 @@ add_executable(
         server/thread_pool.c
         main.c
         logger/logger.c
-        server/socket_poll.c)
+        server/socket_poll.c
+        server/server.c)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC logger)
 

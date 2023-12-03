@@ -6,57 +6,39 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "server/thread_pool.h"
 #include "server/socket_poll.h"
+#include "server/server.h"
 #include "logger/logger.h"
 
 #define PORT 9990
 
-static const size_t num_threads = 10;
-static const size_t num_items = 100;
+server_t *server = NULL;
 
-void worker(void* arg)
-{
-	int* val = arg;
-	int old = *val;
 
-	*val += 1000;
-	LOG_INFO("tid=%p, old=%d, val=%d\n", pthread_self(), old, *val);
-
-	if (*val % 2)
-		usleep(100000);
+void sig_handler(int signum) {
+	LOG_INFO("Received signal %d\n", signum);
+	free_http_server_t(server);
+	exit(0);
 }
 
 int main(int argc, char** argv)
 {
-	tpool_t* tm;
-	int* vals;
-	size_t i;
+	char *host = "0.0.0.0";
+	int port = PORT, thread_num = THREAD_NUM;
 
-	tm = tpool_create(num_threads);
-	vals = calloc(num_items, sizeof(*vals));
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+	signal(SIGKILL, sig_handler);
+	signal(SIGHUP, sig_handler);
 
-//	for (i = 0; i < num_items; i++)
-//	{
-//		vals[i] = i;
-//		tpool_add_work(tm, worker, vals + i);
-//	}
-//
-//	tpool_wait(tm);
+	server = new_http_server(host, port, thread_num);
 
-	for (i = 0; i < num_items; i++)
+	if (run_http_server_t(server) < 0)
 	{
-		LOG_TRACE("%d\n", vals[i]);
+		free_http_server_t(server);
 	}
 
-	free(vals);
-	tpool_destroy(tm);
 
-	int server_socket = creat_socket(PORT);
-	int client_socket = wait_client(server_socket);
-
-	close(client_socket);
-	close(server_socket);
 
 	return 0;
 }
