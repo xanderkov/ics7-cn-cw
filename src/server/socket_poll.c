@@ -255,7 +255,7 @@ void process_req(int clientfd, request_t *req, char *wd) {
 void worker(void* arg)
 {
 	worker_sock_t *worker_sock = arg;
-	char *wd;
+	char *wd = calloc(PATH_NUM, sizeof(char));;
 	int clientfd = worker_sock->clientfd;
 	strcpy(wd, worker_sock->wd);
 	request_t req;
@@ -284,7 +284,6 @@ void worker(void* arg)
 	}
 
 	process_req(clientfd, &req, wd);
-	LOG_INFO("OK");
 	close(clientfd);
 }
 
