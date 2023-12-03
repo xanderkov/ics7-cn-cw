@@ -76,7 +76,6 @@ int run_http_server_t(server_t *server)
 {
 	server->listen_sock = creat_socket(server->port, server->host);
 	int client_socket = wait_client(server);
-
 }
 
 void free_http_server_t(server_t *server) {
