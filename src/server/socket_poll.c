@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 
 
 #define REQ_SIZE 2048
@@ -25,7 +26,7 @@
 
 typedef struct worker_sock_t {
 	char *wd;
-	int clientfd;
+	int *clientfd;
 } worker_sock_t;
 
 
@@ -60,8 +61,10 @@ int read_req(char *buff, int clientfd) {
 	long byte_read = 0;
 
 	byte_read = read(clientfd, buff, REQ_SIZE - 1);
+//	byte_read = recv(clientfd, buff, sizeof(buff), 0);
 	if (byte_read <= 0)
 	{
+
 		return -1;
 	}
 	buff[byte_read - 1] = '\0';
@@ -72,13 +75,14 @@ int write_response(int fd, const void *buf, size_t n) {
 	int byte_write = write(fd, buf, n);
 	if (byte_write < 0)
 	{
-		LOG_ERROR("write error");
+		LOG_ERROR("Write error clientfd: %d, thread: %d", fd, pthread_self());
 	}
 	return byte_write;
 }
 
 void send_err(int clientfd, const char *str) {
-	LOG_INFO("%s", str);
+//	LOG_ERROR("ERROR %s", str);
+	LOG_ERROR( "  ЖОПА    "); // TODO: не забыть про Жопу
 	write_response(clientfd, str, strlen(str));
 }
 
@@ -117,7 +121,7 @@ int send_headers(char *path, int clientfd) {
 		connection[] = "Connection: close";
 	char *len = calloc(HEADER_LEN, sizeof(char)),
 		*type = calloc(HEADER_LEN, sizeof(char));
-	char *res_str;
+	char *res_str = "/0";
 
 	if (len == NULL || type == NULL) {
 		LOG_ERROR("failed to alloc headers buffs");
@@ -248,7 +252,7 @@ void process_req(int clientfd, request_t *req, char *wd) {
 		LOG_ERROR("attempt to access outside the root");
 		return;
 	}
-
+	LOG_TRACE("clientfd: %d, thread: %d", clientfd, pthread_self());
 	send_resp(path, clientfd, GET);
 }
 
@@ -256,37 +260,37 @@ void process_req(int clientfd, request_t *req, char *wd) {
 void worker(void* arg)
 {
 	worker_sock_t *worker_sock = arg;
-	char *wd = calloc(PATH_NUM, sizeof(char));;
-	int clientfd = worker_sock->clientfd;
-	strcpy(wd, worker_sock->wd);
+	char *wd = worker_sock->wd;
+	int *clientfd = worker_sock->clientfd;
 
 	request_t req;
-	char *buff = calloc(REQ_SIZE, sizeof(char));
+	char *buff = malloc(REQ_SIZE);
 	if (buff == NULL) {
 		LOG_ERROR("failed alloc req buf");
 		return;
 	}
 
-	if (read_req(buff, clientfd) < 0) {
-		send_err(clientfd, INT_SERVER_ERR_STR);
-		close(clientfd);
+	if (read_req(buff, *clientfd) < 0) {
+		send_err(*clientfd, INT_SERVER_ERR_STR);
+		close(*clientfd);
 		return;
 	}
 
 	if (parse_req(&req, buff) < 0) {
-		send_err(clientfd, BAD_REQUEST_STR);
-		close(clientfd);
+		send_err(*clientfd, BAD_REQUEST_STR);
+		close(*clientfd);
 		return;
 	}
 	if (req.method == BAD) {
 		LOG_ERROR("unsupported http method");
-		send_err(clientfd, M_NOT_ALLOWED_STR);
-		close(clientfd);
+		send_err(*clientfd, M_NOT_ALLOWED_STR);
+		close(*clientfd);
 		return;
 	}
 
-	process_req(clientfd, &req, wd);
-	close(clientfd);
+	process_req(*clientfd, &req, wd);
+	close(*clientfd);
+	*clientfd = -1;
 }
 
 
@@ -296,23 +300,30 @@ int wait_client(server_t *server)
 	server->clients[0].fd = server->listen_sock;
 	server->clients[0].events = POLLIN;
 	int numfds = 0, maxcl = 0;
+	int first = 0;
 
+	while (1)
+	{
+		numfds = poll(server->clients, maxcl + 1, 5000);
 
-	while (1) {
-		numfds = poll(server->clients, maxcl + 1, -1);
-
-		if (numfds < 0) {
+		if (numfds < 0)
+		{
 			LOG_ERROR("poll error");
 			continue;
 		}
 
-		if (server->clients[0].revents & POLLIN) {
+		if (server->clients[0].revents & POLLIN)
+		{
 			int client_sock = accept(server->listen_sock, NULL, 0);
+			if (client_sock < 0) continue;
 
 			long i = 0;
-			for (i = 1; i < server->cl_num; ++i) {
-				if (server->clients[i].fd < 0) {
+			for (i = 1; i < server->cl_num; ++i)
+			{
+				if (server->clients[i].fd < 0)
+				{
 					server->clients[i].fd = client_sock;
+					server->clients[i].events = POLLIN | POLLPRI;
 					break;
 				}
 			}
@@ -320,28 +331,33 @@ int wait_client(server_t *server)
 				LOG_ERROR("too many connections");
 				continue;
 			}
-			server->clients[i].events = POLLIN;
 
-			if (i > maxcl) maxcl = i;
-			if (--numfds <= 0) continue;
-		}
-		for (int i = 1; i <= maxcl; ++i) {
-			if (server->clients[i].fd < 0)
+			if (i > maxcl)
+			{
+				maxcl = i;
+				LOG_INFO("Max clients: %d", maxcl);
+			}
+			if (--numfds <= 0)
 			{
 				continue;
 			}
-
-			if (server->clients[i].revents & (POLLIN | POLLERR)) {
+		}
+		for (int i = 1; i <= maxcl; ++i)
+		{
+			if (server->clients[i].fd >= 0 && server->clients[i].revents & (POLLIN | POLLERR))
+			{
 				worker_sock_t worker_sock;
-				worker_sock.clientfd = server->clients[i].fd;
-				worker_sock.wd = calloc(PATH_NUM, sizeof(char));
-				strcpy(worker_sock.wd, server->wd);
+				worker_sock.clientfd = &server->clients[i].fd;
+				worker_sock.wd = server->wd;
 
 				tpool_add_work(server->pool, worker, &worker_sock);
-				server->clients[i].fd = -1;
 
-				if (--numfds <= 0) break;
+				if (--numfds < 0)
+				{
+					break;
+				}
 			}
 		}
+		tpool_wait(server->pool);
 	}
 }

@@ -9,7 +9,7 @@
 #include <poll.h>
 
 #define HOST_SIZE 16
-#define THREAD_NUM 11
+#define THREAD_NUM 10
 #define PATH_NUM 256
 #define HEADER_LEN 128
 

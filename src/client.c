@@ -38,13 +38,13 @@ int main() {
 		exit(EXIT_FAILURE);
 	}
 
-	char msg_to[BUFF_SIZE] = "GET input/turetskaya_armia.gif HTTP/1.0", buff_resp[RESP_SIZE] = "";
+	char msg_to[BUFF_SIZE] = "GET input/mvideo-final-merge.zip HTTP/1.0", buff_resp[RESP_SIZE] = "";
 	if (send(sock, msg_to, BUFF_SIZE, 0) == -1) {
 		perror("can't send");
 		exit(EXIT_FAILURE);
 	}
 
-	FILE *f= fopen("./output/turetskaya_armia.gif", "wb");
+	FILE *f= fopen("./output/mvideo-final-merge.zip", "wb");
 	if (f == NULL) {
 		perror("fopen error: ");
 		close(sock);
