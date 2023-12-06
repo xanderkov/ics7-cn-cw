@@ -82,7 +82,7 @@ int write_response(int fd, const void *buf, size_t n) {
 
 void send_err(int clientfd, const char *str) {
 //	LOG_ERROR("ERROR %s", str);
-	LOG_ERROR( "  ЖОПА    "); // TODO: не забыть про Жопу
+//	LOG_ERROR( "  ЖОПА    "); // TODO: не забыть про Жопу
 	write_response(clientfd, str, strlen(str));
 }
 
@@ -265,23 +265,27 @@ void worker(void* arg)
 
 	request_t req;
 	char *buff = malloc(REQ_SIZE);
-	if (buff == NULL) {
+	if (buff == NULL)
+	{
 		LOG_ERROR("failed alloc req buf");
 		return;
 	}
 
-	if (read_req(buff, *clientfd) < 0) {
+	if (read_req(buff, *clientfd) < 0)
+	{
 		send_err(*clientfd, INT_SERVER_ERR_STR);
 		close(*clientfd);
 		return;
 	}
 
-	if (parse_req(&req, buff) < 0) {
+	if (parse_req(&req, buff) < 0)
+	{
 		send_err(*clientfd, BAD_REQUEST_STR);
 		close(*clientfd);
 		return;
 	}
-	if (req.method == BAD) {
+	if (req.method == BAD)
+	{
 		LOG_ERROR("unsupported http method");
 		send_err(*clientfd, M_NOT_ALLOWED_STR);
 		close(*clientfd);
@@ -299,12 +303,12 @@ int wait_client(server_t *server)
 {
 	server->clients[0].fd = server->listen_sock;
 	server->clients[0].events = POLLIN;
-	int numfds = 0, maxcl = 0;
+	int numfds = 0, maxcl = 10;
 	int first = 0;
 
 	while (1)
 	{
-		numfds = poll(server->clients, maxcl + 1, 5000);
+		numfds = poll(server->clients, maxcl + 1, -1);
 
 		if (numfds < 0)
 		{
@@ -359,5 +363,6 @@ int wait_client(server_t *server)
 			}
 		}
 		tpool_wait(server->pool);
+
 	}
 }
