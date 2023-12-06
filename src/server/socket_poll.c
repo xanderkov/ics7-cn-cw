@@ -47,7 +47,7 @@ int creat_socket(int port, char *host)
 		return -1;
 	}
 
-	int listenResult = listen(server_socket, 5);
+	int listenResult = listen(server_socket, 128);
 	if (listenResult == -1)
 	{
 		LOG_ERROR("listenResult");
@@ -59,7 +59,10 @@ int creat_socket(int port, char *host)
 
 int read_req(char *buff, int clientfd) {
 	long byte_read = 0;
-
+	if (clientfd < 0) {
+		close(clientfd);
+		return -1;
+	}
 	byte_read = read(clientfd, buff, REQ_SIZE - 1);
 //	byte_read = recv(clientfd, buff, sizeof(buff), 0);
 	if (byte_read <= 0)
@@ -75,14 +78,19 @@ int write_response(int fd, const void *buf, size_t n) {
 	int byte_write = write(fd, buf, n);
 	if (byte_write < 0)
 	{
-		LOG_ERROR("Write error clientfd: %d, thread: %d", fd, pthread_self());
+//		LOG_ERROR("Write error clientfd: %d, thread: %d", fd, pthread_self());
 	}
 	return byte_write;
 }
 
 void send_err(int clientfd, const char *str) {
 //	LOG_ERROR("ERROR %s", str);
-//	LOG_ERROR( "  ЖОПА    "); // TODO: не забыть про Жопу
+	if (clientfd == -1) {
+//		LOG_ERROR("clientfd BAD %d", clientfd);
+		close(clientfd);
+		return;
+	}
+
 	write_response(clientfd, str, strlen(str));
 }
 
@@ -303,12 +311,12 @@ int wait_client(server_t *server)
 {
 	server->clients[0].fd = server->listen_sock;
 	server->clients[0].events = POLLIN;
-	int numfds = 0, maxcl = 10;
+	int numfds = 0, maxcl = 0;
 	int first = 0;
 
 	while (1)
 	{
-		numfds = poll(server->clients, maxcl + 1, -1);
+		numfds = poll(server->clients, maxcl + 1, 5000);
 
 		if (numfds < 0)
 		{
@@ -318,8 +326,11 @@ int wait_client(server_t *server)
 
 		if (server->clients[0].revents & POLLIN)
 		{
-			int client_sock = accept(server->listen_sock, NULL, 0);
-			if (client_sock < 0) continue;
+			int client_sock = accept(server->listen_sock, NULL, NULL);
+			if (client_sock < 0)
+			{
+				continue;
+			}
 
 			long i = 0;
 			for (i = 1; i < server->cl_num; ++i)
@@ -327,7 +338,7 @@ int wait_client(server_t *server)
 				if (server->clients[i].fd < 0)
 				{
 					server->clients[i].fd = client_sock;
-					server->clients[i].events = POLLIN | POLLPRI;
+					server->clients[i].events = POLLIN;
 					break;
 				}
 			}

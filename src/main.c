@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "server/socket_poll.h"
 #include "server/server.h"
@@ -30,6 +31,7 @@ int main(int argc, char** argv)
 	signal(SIGTERM, sig_handler);
 	signal(SIGKILL, sig_handler);
 	signal(SIGHUP, sig_handler);
+	signal(SIGPIPE, SIG_IGN);
 
 	server = new_http_server(host, port, thread_num);
 
@@ -37,8 +39,6 @@ int main(int argc, char** argv)
 	{
 		free_http_server_t(server);
 	}
-
-
 
 	return 0;
 }
