@@ -4,15 +4,39 @@
 
 Тестирование выполнялось на устройстве со следующими техническими характеристиками:
 
-\begin{itemize}
+\begin{enumerate}
 	\item Операционная система Mac Os\cite{linux};
 	\item Оперативная память 16 Гбайт;
 	\item Процессор Mac M1 Pro \cite{amd}.
-\end{itemize}
+\end{enumerate}
+
+Устройство было подключено к сети во времени исследования времени работы программы.
 
 \subsection{Демонстрация работы программы}
 
+На рисунке \ref{tasov:naydet:menya} представлен пример работы программы.
+Программа выводит тело запрашиваемой страницы.
+Страница была получена с диска.
 
+\begin{figure}[ht!]
+	\centering
+		\includegraphics[width=0.8\textwidth]{assets/images/demon.png}
+		\caption{Демонстрация работы программы}
+		\label{tasov:naydet:menya}
+\end{figure}
+\FloatBarrier
+\subsection{Результаты исследования}
+
+На рисунке \ref{tasov:sec:menya} представлен график сравнения времени запросов.
+
+\begin{figure}[ht!]
+	\centering
+		\includegraphics[width=1\textwidth]{assets/images/comp-5.png}
+		\caption{Результаты времени запроса к серверу}
+		\label{tasov:sec:menya}
+\end{figure}
+
+Из графика можно сделать вывод, что nginx работает 2 раза медленнее на 5 клиентах.
 
 \subsection{Вывод}
 

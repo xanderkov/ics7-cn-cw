@@ -1,8 +1,121 @@
 \section{\large Технологическая часть}
 
+\subsection*{Введение}
+
+В данном разделе представлены требования к программе и реализованы спроектированные методы.
+
+\subsection{Требования к программе}
+
+Для того чтобы программное обеспечение удовлетворяло требованиям, необходимо определить их заранее и придерживаться их в процессе разработки. 
+Программное обеспечение должно удовлетворять требованиям, которые необходимы для работы спроектированной системы:
+
+\begin{enumerate}
+    \item поддержка запросов GET и HEAD;
+    \item корректная передача файлов размером в 100мб;
+    \item поддержка многопоточности.
+\end{enumerate}
+
 \subsection{Средства реализации}
 
 Для реализации ПО был выбран язык C \cite{C}.
 В данном языке есть все требующиеся инструменты для данной курсовой работы.
-В качестве среды разработки была выбрана среда VS code \cite{vscode}.
+В качестве среды разработки была выбрана среда Clion \cite{vscode}.
 
+\subsection{Реализация сокета poll}
+
+\begin{lstlisting}[label=dbcreate, caption=Сокета poll]
+    while (1)
+	{
+		numfds = poll(server->clients, maxcl + 1, -1);
+		if (numfds < 0)
+		{
+			LOG_ERROR("poll error");
+			continue;
+		}
+		if (server->clients[0].revents & POLLIN)
+		{
+			int client_sock = accept(server->listen_sock, NULL, 0);
+			if (client_sock < 0) continue;
+			long i = 0;
+			for (i = 1; i < server->cl_num; ++i)
+			{
+				if (server->clients[i].fd < 0)
+				{
+					server->clients[i].fd = client_sock;
+					server->clients[i].events = POLLIN | POLLPRI;
+					break;
+				}
+			}
+			if (i == server->cl_num) {
+				LOG_ERROR("too many connections");
+				continue;
+			}
+			if (i > maxcl)
+			{
+				maxcl = i;
+				LOG_INFO("Max clients: %d", maxcl);
+			}
+			if (--numfds <= 0)
+			{
+				continue;
+			}
+		}
+		for (int i = 1; i <= maxcl; ++i)
+		{
+			if (server->clients[i].fd >= 0 && server->clients[i].revents & (POLLIN | POLLERR))
+			{
+				worker_sock_t worker_sock;
+				worker_sock.clientfd = &server->clients[i].fd;
+				worker_sock.wd = server->wd;
+				tpool_add_work(server->pool, worker, &worker_sock);
+
+				if (--numfds < 0)
+				{
+					break;
+				}
+			}
+		}
+		tpool_wait(server->pool);
+	}
+\end{lstlisting}
+
+\subsection{Реализация пуллинг потоков}
+
+\begin{lstlisting}[label=dbcreate, caption=Сокета poll]
+    static void* tpool_worker(void* arg)
+    {
+        tpool_t* tm = arg;
+        tpool_work_t* work;
+    
+        while (1)
+        {
+            pthread_mutex_lock(&(tm->work_mutex));
+            while (tm->work_first == NULL && !tm->stop)
+                pthread_cond_wait(&(tm->work_cond), &(tm->work_mutex));
+            if (tm->stop)
+                break;
+            work = tpool_work_get(tm);
+            tm->working_cnt++;
+            pthread_mutex_unlock(&(tm->work_mutex));
+            if (work != NULL)
+            {
+                work->func(work->arg);
+                tpool_work_destroy(work);
+            }
+            pthread_mutex_lock(&(tm->work_mutex));
+            tm->working_cnt--;
+            if (!tm->stop && tm->working_cnt == 0 && tm->work_first == NULL)
+                pthread_cond_signal(&(tm->working_cond));
+            pthread_mutex_unlock(&(tm->work_mutex));
+        }
+        tm->thread_cnt--;
+        pthread_cond_signal(&(tm->working_cond));
+        pthread_mutex_unlock(&(tm->work_mutex));
+        return NULL;
+    }    
+\end{lstlisting}
+
+
+\subsection*{Вывод}
+
+В данном разделе представлены требования к программе и реализованы спроектированные методы.
